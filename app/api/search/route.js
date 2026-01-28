@@ -5,9 +5,9 @@ export async function POST(request) {
   try {
     const { query, location } = await request.json()
 
-    if (!query || !location) {
+    if (!location) {
       return NextResponse.json(
-        { error: 'Query and location are required' },
+        { error: 'Location is required' },
         { status: 400 }
       )
     }
@@ -22,32 +22,19 @@ export async function POST(request) {
       businesses.map(async (business, index) => {
         console.log(`[${index + 1}/${businesses.length}] Checking: ${business.name}`)
         
-        // If Google already provided a website, trust it (no need for fallback search)
-        if (business.website) {
+        // Trust Google Places API data - no fallback search needed
+        // This saves API calls and improves speed
+        const hasWebsite = !!business.website
+        
+        if (hasWebsite) {
           console.log(`  ✓ Has website: ${business.website}`)
-          return {
-            ...business,
-            hasWebsite: true,
-          }
-        }
-        
-        // Only do fallback search for businesses without websites
-        const websiteCheck = await checkBusinessWebsite(
-          business.name, 
-          location, 
-          null
-        )
-        
-        if (websiteCheck.hasWebsite) {
-          console.log(`  ✓ Found website via fallback: ${websiteCheck.website}`)
         } else {
           console.log(`  ✗ No website found`)
         }
         
         return {
           ...business,
-          hasWebsite: websiteCheck.hasWebsite,
-          website: websiteCheck.website || null,
+          hasWebsite: hasWebsite,
         }
       })
     )

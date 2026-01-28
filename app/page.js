@@ -16,8 +16,8 @@ export default function Home() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (!query.trim() || !location.trim()) {
-      setError('Please fill in both business type and location')
+    if (!location.trim()) {
+      setError('Please enter a location')
       return
     }
 
@@ -42,6 +42,10 @@ export default function Home() {
 
       setResults(data.businesses || [])
       setSelectedBusinesses(new Set())
+      // Clear query after successful search if it was empty (location-only search)
+      if (!query.trim()) {
+        setQuery('')
+      }
     } catch (err) {
       setError(err.message || 'An error occurred while searching')
     } finally {
@@ -57,6 +61,21 @@ export default function Home() {
       newSelected.add(index)
     }
     setSelectedBusinesses(newSelected)
+  }
+
+  const selectAllBusinesses = () => {
+    const businessesWithoutWebsites = results.filter(b => !b.hasWebsite)
+    const allIndices = businessesWithoutWebsites.map(business => {
+      return results.findIndex(r => 
+        r.placeId === business.placeId && r.name === business.name
+      )
+    }).filter(idx => idx !== -1)
+    
+    setSelectedBusinesses(new Set(allIndices))
+  }
+
+  const deselectAll = () => {
+    setSelectedBusinesses(new Set())
   }
 
   const addSelectedToSaved = () => {
@@ -142,11 +161,11 @@ export default function Home() {
       <div className="search-section">
         <form onSubmit={handleSubmit} className="search-form">
           <div className="form-group">
-            <label htmlFor="query">Business Type</label>
+            <label htmlFor="query">Business Type (Optional)</label>
             <input
               id="query"
               type="text"
-              placeholder="e.g., restaurants, plumbers, lawyers"
+              placeholder="e.g., restaurants, plumbers, lawyers (leave blank for all businesses)"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               disabled={loading}
@@ -220,6 +239,22 @@ export default function Home() {
 
             {businessesWithoutWebsites.length > 0 && (
               <div className="selection-actions">
+                <div className="select-buttons">
+                  <button
+                    onClick={selectAllBusinesses}
+                    className="select-all-button"
+                  >
+                    Select All ({businessesWithoutWebsites.length})
+                  </button>
+                  {selectedBusinesses.size > 0 && (
+                    <button
+                      onClick={deselectAll}
+                      className="deselect-all-button"
+                    >
+                      Deselect All
+                    </button>
+                  )}
+                </div>
                 <button
                   onClick={addSelectedToSaved}
                   disabled={selectedBusinesses.size === 0}
