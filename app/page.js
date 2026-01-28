@@ -31,6 +31,7 @@ export default function Home() {
   const [viewingLead, setViewingLead] = useState(null)
   const [sortBy, setSortBy] = useState('relevance') // 'relevance', 'rating', 'reviews', 'name'
   const [hideChains, setHideChains] = useState(false)
+  const [userCoords, setUserCoords] = useState(null)
   const [creatingProject, setCreatingProject] = useState(false)
   const [editingProject, setEditingProject] = useState(null)
   const [deletingProject, setDeletingProject] = useState(null)
@@ -58,12 +59,30 @@ export default function Home() {
     return chainKeywords.some((kw) => lower.includes(kw))
   }
 
-  // Load saved data on mount
+  // Load saved data and attempt to get browser location on mount
   useEffect(() => {
     const saved = getLeads()
     const savedProjects = getProjects()
     setSavedBusinesses(saved)
     setProjects(savedProjects)
+
+    if (typeof window !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserCoords({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          })
+        },
+        (error) => {
+          console.log('Geolocation not available or denied:', error?.message || error)
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 5000,
+        }
+      )
+    }
   }, [])
 
   const handleSubmit = async (e) => {
@@ -84,7 +103,7 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ query, location }),
+        body: JSON.stringify({ query, location, userCoords }),
       })
 
       const data = await response.json()
@@ -759,6 +778,12 @@ export default function Home() {
 
       <div className="search-section">
         <div className="search-help">
+          <div className="location-note">
+            <strong>
+              For more accurate local results, please allow your browser to share your approximate location when prompted.
+              We only use this to bias searches closer to where you are.
+            </strong>
+          </div>
           <h3>How this works</h3>
           <p>
             Enter a business type (or leave it blank) and a location. We search for local businesses,

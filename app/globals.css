@@ -730,6 +730,21 @@ a {
   line-height: 1.5;
 }
 
+.location-note {
+  margin-bottom: 1.25rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #1a1a1a;
+  background: #ffffff;
+}
+
+.location-note strong {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #1a1a1a;
+}
+
 .projects-help {
   flex: 1;
   max-width: 600px;

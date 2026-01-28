@@ -3,7 +3,7 @@ import { searchBusinesses, checkBusinessWebsite } from '@/lib/websiteChecker'
 
 export async function POST(request) {
   try {
-    const { query, location } = await request.json()
+    const { query, location, userCoords } = await request.json()
 
     if (!location) {
       return NextResponse.json(
@@ -12,8 +12,8 @@ export async function POST(request) {
       )
     }
 
-    // Search for businesses in the location
-    const businesses = await searchBusinesses(query, location)
+    // Search for businesses in the location, biased by user coordinates if available
+    const businesses = await searchBusinesses(query, location, userCoords)
 
     // Check each business for a website
     // Optimize: Skip fallback search for businesses that already have websites from Google
