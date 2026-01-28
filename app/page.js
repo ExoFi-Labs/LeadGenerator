@@ -10,6 +10,8 @@ export default function Home() {
   const [results, setResults] = useState([])
   const [error, setError] = useState('')
   const [showWithWebsites, setShowWithWebsites] = useState(false)
+  const [savedBusinesses, setSavedBusinesses] = useState([])
+  const [selectedBusinesses, setSelectedBusinesses] = useState(new Set())
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -39,11 +41,95 @@ export default function Home() {
       }
 
       setResults(data.businesses || [])
+      setSelectedBusinesses(new Set())
     } catch (err) {
       setError(err.message || 'An error occurred while searching')
     } finally {
       setLoading(false)
     }
+  }
+
+  const toggleBusinessSelection = (index) => {
+    const newSelected = new Set(selectedBusinesses)
+    if (newSelected.has(index)) {
+      newSelected.delete(index)
+    } else {
+      newSelected.add(index)
+    }
+    setSelectedBusinesses(newSelected)
+  }
+
+  const addSelectedToSaved = () => {
+    const businessesToAdd = Array.from(selectedBusinesses)
+      .map(idx => {
+        const business = results[idx]
+        return business && !business.hasWebsite ? business : null
+      })
+      .filter(b => b !== null)
+    
+    const newSaved = [...savedBusinesses, ...businessesToAdd]
+    // Remove duplicates based on placeId or name+address combination
+    const uniqueSaved = Array.from(
+      new Map(newSaved.map(item => [
+        item.placeId || `${item.name}_${item.address}`,
+        item
+      ])).values()
+    )
+    setSavedBusinesses(uniqueSaved)
+    setSelectedBusinesses(new Set())
+  }
+
+  const removeFromSaved = (index) => {
+    setSavedBusinesses(savedBusinesses.filter((_, i) => i !== index))
+  }
+
+  const exportToCSV = () => {
+    if (savedBusinesses.length === 0) return
+    
+    const headers = ['Name', 'Address', 'Phone', 'Rating', 'Reviews', 'Types', 'Status', 'Google Maps']
+    const rows = savedBusinesses.map(b => [
+      b.name || '',
+      b.address || '',
+      b.phone || '',
+      b.rating || '',
+      b.userRatingsTotal || '',
+      b.types?.join(', ') || '',
+      b.openingHoursStatus || '',
+      b.googleMapsUrl || ''
+    ])
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n')
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `leads_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const exportToEmail = () => {
+    if (savedBusinesses.length === 0) return
+    
+    const emailBody = savedBusinesses.map((b, i) => {
+      return `${i + 1}. ${b.name}
+   Address: ${b.address || 'N/A'}
+   Phone: ${b.phone || 'N/A'}
+   Rating: ${b.rating ? `${b.rating}/5 (${b.userRatingsTotal || 0} reviews)` : 'N/A'}
+   ${b.googleMapsUrl ? `Maps: ${b.googleMapsUrl}` : ''}
+`
+    }).join('\n')
+    
+    const subject = encodeURIComponent(`Lead Generator - ${savedBusinesses.length} Leads`)
+    const body = encodeURIComponent(`Found ${savedBusinesses.length} businesses without websites:\n\n${emailBody}`)
+    
+    window.location.href = `mailto:?subject=${subject}&body=${body}`
   }
 
   return (
@@ -132,14 +218,45 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="business-list">
-              {displayedResults.map((business, index) => (
-                <div 
-                  key={index} 
-                  className={`business-card ${business.hasWebsite ? 'has-website' : ''}`}
+            {businessesWithoutWebsites.length > 0 && (
+              <div className="selection-actions">
+                <button
+                  onClick={addSelectedToSaved}
+                  disabled={selectedBusinesses.size === 0}
+                  className="add-to-saved-button"
                 >
-                  <div className="business-header">
-                    <div className="business-name">{business.name}</div>
+                  Add Selected ({selectedBusinesses.size}) to Saved List
+                </button>
+              </div>
+            )}
+
+            <div className="business-list">
+              {displayedResults.map((business, displayIndex) => {
+                // Find the actual index in the full results array
+                const actualIndex = results.findIndex(r => 
+                  r.placeId === business.placeId && r.name === business.name
+                )
+                const isSelected = actualIndex !== -1 && selectedBusinesses.has(actualIndex)
+                const isSelectable = !business.hasWebsite
+                
+                return (
+                  <div 
+                    key={actualIndex !== -1 ? actualIndex : displayIndex} 
+                    className={`business-card ${business.hasWebsite ? 'has-website' : ''} ${isSelected ? 'selected' : ''}`}
+                  >
+                    {isSelectable && (
+                      <div className="business-select">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => actualIndex !== -1 && toggleBusinessSelection(actualIndex)}
+                          id={`business-${actualIndex !== -1 ? actualIndex : displayIndex}`}
+                        />
+                        <label htmlFor={`business-${actualIndex !== -1 ? actualIndex : displayIndex}`}>Select</label>
+                      </div>
+                    )}
+                    <div className="business-header">
+                      <div className="business-name">{business.name}</div>
                     {business.rating && (
                       <div className="business-rating">
                         <span className="rating-stars">⭐</span>
@@ -237,7 +354,8 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )
@@ -248,6 +366,88 @@ export default function Home() {
           <div className="no-results">
             <h3>No businesses found</h3>
             <p>Try adjusting your search terms or location</p>
+          </div>
+        </div>
+      )}
+
+      {savedBusinesses.length > 0 && (
+        <div className="results-section saved-section">
+          <div className="results-header">
+            <h2>Saved Leads ({savedBusinesses.length})</h2>
+            <div className="export-actions">
+              <button onClick={exportToCSV} className="export-button">
+                Export to CSV
+              </button>
+              <button onClick={exportToEmail} className="export-button">
+                Export to Email
+              </button>
+            </div>
+          </div>
+
+          <div className="business-list">
+            {savedBusinesses.map((business, index) => (
+              <div key={index} className="business-card">
+                <div className="business-header">
+                  <div className="business-name">{business.name}</div>
+                  <button
+                    onClick={() => removeFromSaved(index)}
+                    className="remove-button"
+                  >
+                    Remove
+                  </button>
+                </div>
+                
+                {business.types && business.types.length > 0 && (
+                  <div className="business-types">
+                    {business.types.map((type, i) => (
+                      <span key={i} className="business-type-tag">{type}</span>
+                    ))}
+                  </div>
+                )}
+                
+                <div className="business-info">
+                  {business.address && (
+                    <div className="business-address">📍 {business.address}</div>
+                  )}
+                  {business.phone && (
+                    <div className="business-phone">📞 {business.phone}</div>
+                  )}
+                  {business.rating && (
+                    <div className="business-rating">
+                      <span className="rating-stars">⭐</span>
+                      <span className="rating-value">{business.rating.toFixed(1)}</span>
+                      {business.userRatingsTotal && (
+                        <span className="rating-count">({business.userRatingsTotal})</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="business-footer">
+                  <div className="no-website-badge">No Website Found</div>
+                  <div className="business-links">
+                    {business.googleMapsUrl && (
+                      <a 
+                        href={business.googleMapsUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="google-maps-link"
+                      >
+                        Google Maps →
+                      </a>
+                    )}
+                    <a 
+                      href={`https://www.google.com/search?q=${encodeURIComponent(`${business.name} ${location}`)}`}
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="google-search-link"
+                    >
+                      Google Search →
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

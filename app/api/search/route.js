@@ -16,19 +16,30 @@ export async function POST(request) {
     const businesses = await searchBusinesses(query, location)
 
     // Check each business for a website
-    // If businesses already have website info (from API), verify it; otherwise search for one
+    // Optimize: Skip fallback search for businesses that already have websites from Google
     console.log(`Checking websites for ${businesses.length} businesses...`)
     const businessesWithWebsiteStatus = await Promise.all(
       businesses.map(async (business, index) => {
         console.log(`[${index + 1}/${businesses.length}] Checking: ${business.name}`)
+        
+        // If Google already provided a website, trust it (no need for fallback search)
+        if (business.website) {
+          console.log(`  ✓ Has website: ${business.website}`)
+          return {
+            ...business,
+            hasWebsite: true,
+          }
+        }
+        
+        // Only do fallback search for businesses without websites
         const websiteCheck = await checkBusinessWebsite(
           business.name, 
           location, 
-          business.website || null
+          null
         )
         
         if (websiteCheck.hasWebsite) {
-          console.log(`  ✓ Has website: ${websiteCheck.website || business.website}`)
+          console.log(`  ✓ Found website via fallback: ${websiteCheck.website}`)
         } else {
           console.log(`  ✗ No website found`)
         }
@@ -36,6 +47,7 @@ export async function POST(request) {
         return {
           ...business,
           hasWebsite: websiteCheck.hasWebsite,
+          website: websiteCheck.website || null,
         }
       })
     )
